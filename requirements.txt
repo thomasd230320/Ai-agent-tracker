@@ -1,0 +1,4 @@
+# AI Agent Thought Dashboard dependencies.
+# Tip: `pip install -U streamlit anthropic` to grab the latest if anything is missing.
+streamlit>=1.32
+anthropic>=0.69
