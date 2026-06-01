@@ -1,62 +1,47 @@
-# 🛰️ AI Agent Activity Dashboard
+# 🛰️ AI Agent Activity Dashboard (Simulation)
 
-A single-file [Streamlit](https://streamlit.io) app that lets you launch an AI
-agent and **watch it work in real time**. The screen is split into two
-side-by-side columns:
+A single-file [Streamlit](https://streamlit.io) app that lets you dispatch a
+task to an autonomous AI agent and **watch it work in real time** — with **no
+API key, no account, no billing, and no rate limits**. Everything is simulated
+locally, so it runs **free anywhere** (and on your phone + computer once hosted).
 
-| Left — 🎯 Tasks & Results | Right — 🛰️ Live Agent Activity |
+| Left — 🎯 Mission Control | Right — 🛰️ Live Agent Activity |
 | --- | --- |
-| The task you give the agent and its final answer. | A streaming feed of what the agent is doing — its narration, the tools it calls, the arguments it passes, and the status of each call — as it happens. |
-
-Powered by **Google Gemini** (the **free** tier from
-[aistudio.google.com](https://aistudio.google.com)) with function calling
-(tools) and streaming. Two mock tools the agent can choose to call:
-
-- `execute_web_search(query)` — returns canned, plausible search results.
-- `fetch_system_metrics()` — returns a randomized live-metrics snapshot.
+| The task you dispatch and the agent's result. | A streaming feed of the agent's narration, the tools it "calls", the arguments, and the result of each step — as it happens. |
 
 ## Quick start
 
 ```bash
 pip install -r requirements.txt
-# Get a free key at https://aistudio.google.com → "Get API key"
-export GEMINI_API_KEY="AIza..."
 streamlit run app.py
 ```
 
-If no key is found, the app shows a clear, actionable error instead of crashing.
+That's it — no key, no secrets, no setup. It just runs.
 
-## Why Gemini?
+## What it does
 
-The free Gemini tier means **no pay-as-you-go billing** — and because it's a
-normal API key (not a subscription), the app **can be hosted** on Streamlit
-Community Cloud, so it works on your **phone and computer** at the same URL.
+- Dispatch a task (type your own, or hit **🎲 Dispatch a random task**).
+- A named agent is assigned and **autonomously** plans which tools to use based
+  on the task, then streams each step live into the activity feed:
+  - 💭 narration of what it's about to do,
+  - 🛠️ the tool call + arguments (`st.info` / `st.json`),
+  - ✅ the tool result (`st.success` / `st.code`),
+- …and finishes with a summarised result on the left.
 
-## How it works
+Five simulated tools drive the activity: `execute_web_search`,
+`fetch_system_metrics`, `query_database`, `analyze_data`, and
+`send_notification`. All return realistic mock data — **nothing leaves your
+machine and there's nothing to pay for.**
 
-1. You give the agent a **task**.
-2. Gemini is called with the task and the two tool definitions, and the response
-   is **streamed**: the agent's narration shows live in the right column.
-3. If Gemini returns a function call, the right column shows the tool name
-   (`st.info`) and arguments (`st.json`), runs the local Python function, shows
-   the result/status (`st.success` / `st.error`), and feeds the result back into
-   the loop.
-4. The agent keeps going **autonomously** (up to `MAX_STEPS`) until it stops
-   calling tools, then the final answer appears on the left. Tasks needing no
-   tool are handled gracefully ("Answered directly").
-
-State (task history + activity log) is kept in `st.session_state`, so it persists
-across Streamlit reruns. Per-turn token usage is shown in the activity log.
+State (task history + activity log) lives in `st.session_state`, so it persists
+across Streamlit reruns.
 
 ## Deploying
 
 See [`DEPLOY.md`](DEPLOY.md) for click-by-click Streamlit Community Cloud steps.
-The app also runs on Hugging Face Spaces, Render, Railway, and Fly.io. It will
-**not** run on Vercel — Streamlit needs a persistent WebSocket server, which
-Vercel's serverless functions don't provide.
+Because it needs no API key, deployment is just: pick the repo, set the main file
+to `app.py`, and click Deploy — it works on phone + computer at one URL.
 
-## Model note
-
-Defaults to **`gemini-2.0-flash`** (reliable on the free tier). Change the single
-`MODEL` constant at the top of `app.py` to use `gemini-2.5-flash` (adds visible
-reasoning) or another model.
+> Want to wire it to a *real* LLM later (Claude, Gemini, etc.)? The agent loop in
+> `process_task()` is the single place to swap the simulated tool calls for real
+> model calls.
