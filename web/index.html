@@ -4,24 +4,52 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>AI Agent Activity Dashboard</title>
-  <meta name="description" content="Watch autonomous AI agents work — a free, in-browser simulation." />
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🛰️</text></svg>" />
+  <meta name="description" content="Watch a little robot agent work in its room — a free, in-browser simulation." />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🤖</text></svg>" />
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
   <header>
-    <h1>🛰️ AI Agent Activity Dashboard</h1>
-    <p>Dispatch a task and watch an autonomous agent work — live. Left: the task &amp; result. Right: its reasoning, tool calls, and status.</p>
+    <h1>🤖 AI Agent Activity Dashboard</h1>
+    <p>Give the agent a task and watch the little robot get to work in its room — it busies about while working, and rests when it's done.</p>
     <span class="badge">Simulation — no API key, no limits, free. Runs entirely in your browser.</span>
-    <div id="roster"></div>
   </header>
+
+  <!-- The robot's room: animates only while a task is running -->
+  <section class="room-wrap">
+    <div class="room" id="room">
+      <div class="prop server" aria-hidden="true">🗄️</div>
+      <div class="prop monitor" aria-hidden="true">🖥️</div>
+      <div class="prop plant" aria-hidden="true">🪴</div>
+      <div class="prop boxes" aria-hidden="true">📦</div>
+      <span class="spark s1" aria-hidden="true">✨</span>
+      <span class="spark s2" aria-hidden="true">✨</span>
+      <span class="spark s3" aria-hidden="true">✨</span>
+
+      <div class="robot" id="robot">
+        <div class="bubble" id="robotBubble">💤 idle</div>
+        <div class="bot">
+          <div class="head">
+            <span class="antenna"></span>
+            <span class="eye"></span><span class="eye"></span>
+          </div>
+          <div class="torso"></div>
+          <span class="arm a-l"></span><span class="arm a-r"></span>
+          <span class="leg l-l"></span><span class="leg l-r"></span>
+        </div>
+        <div class="shadow"></div>
+      </div>
+
+      <div class="floor"></div>
+    </div>
+  </section>
 
   <main class="grid">
     <section class="panel">
       <h2>🎯 Mission Control</h2>
       <div id="chat" class="scroll" aria-live="polite"></div>
       <form id="taskForm">
-        <input id="taskInput" type="text" placeholder="Dispatch a task to an agent…" autocomplete="off" />
+        <input id="taskInput" type="text" placeholder="Give the robot a task…" autocomplete="off" />
         <button type="submit">Dispatch</button>
       </form>
       <div class="row">
