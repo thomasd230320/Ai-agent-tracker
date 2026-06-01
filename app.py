@@ -1,22 +1,24 @@
 """
-AI Agent Thought Dashboard
-==========================
+AI Agent Activity Dashboard  (powered by Google Gemini — free tier)
+===================================================================
 
-A single-file Streamlit application that visualizes a Claude agent's reasoning
-in real time. The interface is split into two side-by-side columns:
+A single-file Streamlit app that lets you launch an AI agent and **watch it
+work in real time**. The screen is split into two side-by-side columns:
 
-  • Left  — a clean chat interface (your messages + the agent's final answers).
-  • Right — a live "Agent Activity" log that shows the model's thinking, the
-            tools it decides to call, the arguments it passes, and the
-            execution status of each call, *before* the final answer is shown.
+  • Left  — 🎯 Tasks & Results: the task you give the agent and its final answer.
+  • Right — 🛰️ Live Agent Activity: a streaming log of what the agent is doing —
+            its narration, the tools it calls, the arguments it passes, and the
+            status of each call — as it happens, before the final answer.
 
-It uses the modern Anthropic Python SDK with tool calling (function calling)
-and two mock tools — ``execute_web_search`` and ``fetch_system_metrics``.
+It uses Google's **Gemini** API (the free tier from https://aistudio.google.com)
+with function calling (tools) and streaming. Two mock tools are provided:
+``execute_web_search(query)`` and ``fetch_system_metrics()``.
 
 Run it:
 
-    pip install -r requirements.txt        # streamlit + anthropic
-    export ANTHROPIC_API_KEY="sk-ant-..."  # your Anthropic API key
+    pip install -r requirements.txt          # streamlit + google-genai
+    # then provide a free Gemini API key (https://aistudio.google.com → Get API key):
+    export GEMINI_API_KEY="AIza..."           # or put it in Streamlit Secrets
     streamlit run app.py
 """
 
@@ -27,86 +29,72 @@ import os
 import random
 from datetime import datetime
 
-import anthropic
 import streamlit as st
+from google import genai
+from google.genai import types
 
 # --------------------------------------------------------------------------- #
 # Configuration
 # --------------------------------------------------------------------------- #
 
-# The original request named "claude-3-5-sonnet". That snapshot has been retired
-# by Anthropic (it now returns a 404), so we default to the current Sonnet —
-# Claude Sonnet 4.6 — which is the documented drop-in replacement. Change this
-# single constant if you have access to (or prefer) a different model.
-MODEL = "claude-sonnet-4-6"
+# Free-tier friendly default. You can switch to "gemini-2.5-flash" (adds
+# reasoning) or "gemini-1.5-flash" by changing this one constant.
+MODEL = "gemini-2.0-flash"
 
-# We stream every request, so a generous output ceiling is safe. ``max_tokens``
-# is only a cap — the model stops as soon as it is done, so a higher value adds
-# no latency for short answers, it just prevents truncation on longer ones.
-MAX_TOKENS = 8192
+# Safety cap on the agent's autonomous tool loop (think -> call tool -> repeat).
+MAX_STEPS = 8
 
-PAGE_TITLE = "AI Agent Thought Dashboard"
+PAGE_TITLE = "AI Agent Activity Dashboard"
 
 SYSTEM_PROMPT = (
-    "You are an autonomous AI agent running inside a real-time 'Thought "
-    "Dashboard'. Reason about each request and decide whether one of your tools "
-    "would genuinely help before answering.\n\n"
-    "Tools available to you:\n"
+    "You are an autonomous AI agent whose activity is being watched on a live "
+    "dashboard. Carry out the user's task step by step.\n\n"
+    "You have two tools:\n"
     "  • execute_web_search(query) — look up current or external information.\n"
     "  • fetch_system_metrics()    — read live host metrics (CPU, memory, etc.).\n\n"
-    "Call a tool only when it actually helps answer the question; if you can "
-    "answer directly from your own knowledge, do so. Once you have what you "
-    "need, reply with a clear, concise final answer for the user."
+    "Briefly narrate what you are about to do before calling a tool, call a tool "
+    "only when it genuinely helps, and once you have what you need, give a clear, "
+    "concise final answer for the user."
 )
 
-# Sending the system prompt as a cache-controlled block lets the API reuse this
-# (and the tool definitions) as a cached prefix across the multiple round-trips
-# of a single tool-using turn, and across turns. See response usage in the
-# activity log for cache hits.
-SYSTEM_PROMPT_BLOCKS = [
-    {
-        "type": "text",
-        "text": SYSTEM_PROMPT,
-        "cache_control": {"type": "ephemeral"},
-    }
-]
-
 # --------------------------------------------------------------------------- #
-# Tool definitions (sent to Claude) and their local mock implementations
+# Tool definitions (sent to Gemini) and their local mock implementations
 # --------------------------------------------------------------------------- #
 
-TOOLS = [
-    {
-        "name": "execute_web_search",
-        "description": (
-            "Search the web for up-to-date information. Call this when the user "
-            "asks about current events, recent facts, prices, libraries, or "
-            "anything that benefits from fresh external data."
-        ),
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "query": {
-                    "type": "string",
-                    "description": "The search query to run.",
-                }
-            },
-            "required": ["query"],
-        },
-    },
-    {
-        "name": "fetch_system_metrics",
-        "description": (
-            "Fetch a snapshot of live system metrics (CPU, memory, disk, "
-            "network, uptime). Call this when the user asks about system health, "
-            "performance, load, or resource usage."
-        ),
-        "input_schema": {
-            "type": "object",
-            "properties": {},
-            "required": [],
-        },
-    },
+GENAI_TOOLS = [
+    types.Tool(
+        function_declarations=[
+            types.FunctionDeclaration(
+                name="execute_web_search",
+                description=(
+                    "Search the web for up-to-date information. Use this when the "
+                    "task involves current events, recent facts, prices, libraries, "
+                    "or anything needing fresh external data."
+                ),
+                parameters=types.Schema(
+                    type=types.Type.OBJECT,
+                    properties={
+                        "query": types.Schema(
+                            type=types.Type.STRING,
+                            description="The search query to run.",
+                        )
+                    },
+                    required=["query"],
+                ),
+            ),
+            types.FunctionDeclaration(
+                name="fetch_system_metrics",
+                description=(
+                    "Fetch a snapshot of live system metrics (CPU, memory, disk, "
+                    "network, uptime). Use this when the task involves system "
+                    "health, performance, load, or resource usage."
+                ),
+                parameters=types.Schema(
+                    type=types.Type.OBJECT, properties={}, required=[]
+                ),
+            ),
+        ]
+    )
 ]
 
 
@@ -171,7 +159,7 @@ def run_tool(name: str, payload: dict) -> tuple[str, bool]:
         return f"Error: unknown tool '{name}'.", True
     try:
         return handler(payload), False
-    except Exception as exc:  # noqa: BLE001 - surface any failure back to Claude
+    except Exception as exc:  # noqa: BLE001 - surface any failure back to the model
         return f"Error while executing '{name}': {exc}", True
 
 
@@ -182,34 +170,35 @@ def run_tool(name: str, payload: dict) -> tuple[str, bool]:
 
 def init_state() -> None:
     """Initialise the persistent state used across Streamlit reruns."""
-    # Raw Anthropic conversation history (the source of truth for the model).
-    st.session_state.setdefault("api_messages", [])
-    # Left column: list of {"role": ..., "text": ...} for the chat transcript.
+    # Raw Gemini conversation history (list[types.Content]) — source of truth.
+    st.session_state.setdefault("contents", [])
+    # Left column: list of {"role": ..., "text": ...} for the task/result log.
     st.session_state.setdefault("chat_log", [])
-    # Right column: list of structured activity entries (thinking, tools, ...).
+    # Right column: list of structured activity entries.
     st.session_state.setdefault("activity_log", [])
 
 
 @st.cache_resource(show_spinner=False)
-def get_client(api_key: str) -> anthropic.Anthropic:
-    """Create (and cache) the Anthropic client for the given key."""
-    return anthropic.Anthropic(api_key=api_key)
+def get_client(api_key: str) -> genai.Client:
+    """Create (and cache) the Gemini client for the given key."""
+    return genai.Client(api_key=api_key)
 
 
 def resolve_api_key() -> str | None:
-    """Find the Anthropic API key from Streamlit secrets or the environment.
+    """Find the Gemini API key from Streamlit secrets or the environment.
 
-    Works on Streamlit Community Cloud (key set under *Settings → Secrets*),
-    and locally (a ``.streamlit/secrets.toml`` file or an ``ANTHROPIC_API_KEY``
-    environment variable). Streamlit secrets take precedence when present.
+    Works on Streamlit Community Cloud (key set under *Settings → Secrets*) and
+    locally (a ``.streamlit/secrets.toml`` file or an env var). Accepts either
+    ``GEMINI_API_KEY`` or ``GOOGLE_API_KEY``.
     """
     try:
         # Accessing st.secrets raises if no secrets file/config exists, so guard it.
-        if "ANTHROPIC_API_KEY" in st.secrets:
-            return str(st.secrets["ANTHROPIC_API_KEY"])
+        for key in ("GEMINI_API_KEY", "GOOGLE_API_KEY"):
+            if key in st.secrets:
+                return str(st.secrets[key])
     except Exception:  # noqa: BLE001 - "no secrets configured" is a normal case
         pass
-    return os.environ.get("ANTHROPIC_API_KEY")
+    return os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
 
 
 # --------------------------------------------------------------------------- #
@@ -228,6 +217,9 @@ def render_log_entry(entry: dict, c) -> None:
         with c.expander("🧠 Reasoning", expanded=False):
             st.markdown(entry["text"])
 
+    elif kind == "narration":
+        c.markdown(f"💭 _{entry['text']}_")
+
     elif kind == "tool_call":
         c.info(f"🛠️ **Tool call:** `{entry['name']}`")
         if entry.get("input"):
@@ -243,12 +235,10 @@ def render_log_entry(entry: dict, c) -> None:
         c.code(entry["output"], language="json")
 
     elif kind == "usage":
-        bits = [f"in {entry['input']}", f"out {entry['output']}"]
-        if entry.get("cache_read"):
-            bits.append(f"cache-read {entry['cache_read']}")
-        if entry.get("cache_write"):
-            bits.append(f"cache-write {entry['cache_write']}")
-        c.caption("📊 tokens — " + " · ".join(bits))
+        c.caption(
+            "📊 tokens — "
+            f"in {entry['input']} · out {entry['output']} · total {entry['total']}"
+        )
 
     elif kind == "error":
         c.error(entry["text"])
@@ -265,16 +255,17 @@ def log_event(entry: dict, c) -> None:
 # --------------------------------------------------------------------------- #
 
 
-def process_turn(client, prompt: str, chat_col, log_col, show_thinking: bool) -> None:
-    """Run the full agentic loop for one user message.
+def process_turn(client, prompt: str, chat_col, log_col) -> None:
+    """Run the agent autonomously for one task, streaming activity live.
 
-    Streams the model's thinking and tool activity into ``log_col`` and the
-    final answer into ``chat_col``, feeding ``tool_result`` blocks back to the
-    API until the model stops requesting tools.
+    Streams the agent's narration and tool activity into ``log_col`` and its
+    final answer into ``chat_col``, feeding tool results back to Gemini until
+    the agent stops calling tools (or hits ``MAX_STEPS``).
     """
-    # Record + display the user's message.
     st.session_state.chat_log.append({"role": "user", "text": prompt})
-    st.session_state.api_messages.append({"role": "user", "content": prompt})
+    st.session_state.contents.append(
+        types.Content(role="user", parts=[types.Part.from_text(text=prompt)])
+    )
 
     with chat_col:
         with st.chat_message("user"):
@@ -282,118 +273,129 @@ def process_turn(client, prompt: str, chat_col, log_col, show_thinking: bool) ->
         assistant_box = st.chat_message("assistant")
     with assistant_box:
         answer_slot = st.empty()
-    answer_slot.markdown("_Thinking…_")
+    answer_slot.markdown("_Agent is working…_")
 
     turn_log = log_col.container()
     log_event(
-        {"kind": "status", "text": f"▶️ New request · {datetime.now():%H:%M:%S}"},
+        {"kind": "status", "text": f"▶️ Task received · {datetime.now():%H:%M:%S}"},
         turn_log,
+    )
+
+    config = types.GenerateContentConfig(
+        system_instruction=SYSTEM_PROMPT,
+        tools=GENAI_TOOLS,
+        automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True),
+        temperature=0.6,
     )
 
     answer_text = ""
     tool_calls_made = 0
-    final_stop_reason = "end_turn"
-    tok_in = tok_out = tok_cache_read = tok_cache_write = 0
-
-    request_kwargs = dict(
-        model=MODEL,
-        max_tokens=MAX_TOKENS,
-        system=SYSTEM_PROMPT_BLOCKS,
-        tools=TOOLS,
-        messages=st.session_state.api_messages,  # same list object, mutated below
-    )
-    if show_thinking:
-        request_kwargs["thinking"] = {"type": "adaptive"}
+    usage_meta = None
 
     try:
-        while True:
-            thinking_slot = turn_log.empty() if show_thinking else None
-            thinking_buf = ""
+        for step in range(MAX_STEPS):
+            narration_slot = turn_log.empty()
+            text_buf = ""
+            thought_buf = ""
+            function_calls = []
 
-            with client.messages.stream(**request_kwargs) as stream:
-                for event in stream:
-                    if event.type != "content_block_delta":
-                        continue
-                    delta = event.delta
-                    if delta.type == "thinking_delta" and thinking_slot is not None:
-                        thinking_buf += delta.thinking
-                        thinking_slot.markdown("🧠 **Reasoning…**\n\n" + thinking_buf)
-                    elif delta.type == "text_delta":
-                        answer_text += delta.text
-                        answer_slot.markdown(answer_text)
-                response = stream.get_final_message()
-
-            # Persist the round's thinking so history re-renders it as an expander.
-            if thinking_buf.strip():
-                st.session_state.activity_log.append(
-                    {"kind": "thinking", "text": thinking_buf}
-                )
-            elif thinking_slot is not None:
-                thinking_slot.empty()
-
-            # Keep the full assistant turn (thinking + tool_use + text, with
-            # signatures) in history so the next round is valid.
-            st.session_state.api_messages.append(
-                {"role": "assistant", "content": response.content}
+            stream = client.models.generate_content_stream(
+                model=MODEL,
+                contents=st.session_state.contents,
+                config=config,
             )
+            for chunk in stream:
+                if getattr(chunk, "usage_metadata", None):
+                    usage_meta = chunk.usage_metadata
+                candidates = getattr(chunk, "candidates", None) or []
+                if not candidates:
+                    continue
+                content = candidates[0].content
+                if not content or not content.parts:
+                    continue
+                for part in content.parts:
+                    call = getattr(part, "function_call", None)
+                    if call is not None:
+                        function_calls.append(call)
+                        continue
+                    txt = getattr(part, "text", None)
+                    if not txt:
+                        continue
+                    if getattr(part, "thought", False):
+                        thought_buf += txt
+                    else:
+                        text_buf += txt
+                    disp = ""
+                    if thought_buf.strip():
+                        disp += "🧠 _" + thought_buf.strip() + "_\n\n"
+                    if text_buf.strip():
+                        disp += "💭 **Agent:** " + text_buf.strip()
+                    narration_slot.markdown(disp or "💭 …")
 
-            usage = response.usage
-            tok_in += usage.input_tokens or 0
-            tok_out += usage.output_tokens or 0
-            tok_cache_read += getattr(usage, "cache_read_input_tokens", 0) or 0
-            tok_cache_write += getattr(usage, "cache_creation_input_tokens", 0) or 0
+            # Rebuild the model's turn for history (text + any tool calls).
+            model_parts = []
+            if text_buf:
+                model_parts.append(types.Part.from_text(text=text_buf))
+            for call in function_calls:
+                model_parts.append(types.Part(function_call=call))
+            if model_parts:
+                st.session_state.contents.append(
+                    types.Content(role="model", parts=model_parts)
+                )
 
-            final_stop_reason = response.stop_reason
-            if response.stop_reason != "tool_use":
+            if thought_buf.strip():
+                st.session_state.activity_log.append(
+                    {"kind": "thinking", "text": thought_buf.strip()}
+                )
+
+            if not function_calls:
+                # Final step: this text is the answer (it belongs on the left).
+                answer_text = text_buf.strip()
+                narration_slot.empty()
                 break
 
-            # Reflect tool activity in the chat bubble while tools run.
-            answer_slot.markdown(answer_text or "_Working… (consulting tools)_")
-
-            tool_results = []
-            for block in response.content:
-                if block.type != "tool_use":
-                    continue
-                tool_calls_made += 1
-                log_event(
-                    {"kind": "tool_call", "name": block.name, "input": dict(block.input)},
-                    turn_log,
+            # Tool step: the narration belongs in the activity log.
+            if text_buf.strip():
+                st.session_state.activity_log.append(
+                    {"kind": "narration", "text": text_buf.strip()}
                 )
-                output, is_error = run_tool(block.name, dict(block.input))
+            answer_slot.markdown("_Agent is using tools…_")
+
+            response_parts = []
+            for call in function_calls:
+                tool_calls_made += 1
+                args = dict(call.args) if call.args else {}
+                log_event(
+                    {"kind": "tool_call", "name": call.name, "input": args}, turn_log
+                )
+                output, is_error = run_tool(call.name, args)
                 log_event(
                     {
                         "kind": "tool_result",
-                        "name": block.name,
+                        "name": call.name,
                         "output": output,
                         "is_error": is_error,
                     },
                     turn_log,
                 )
-                tool_results.append(
-                    {
-                        "type": "tool_result",
-                        "tool_use_id": block.id,
-                        "content": output,
-                        "is_error": is_error,
-                    }
+                response_parts.append(
+                    types.Part.from_function_response(
+                        name=call.name,
+                        response={"error": output} if is_error else {"result": output},
+                    )
                 )
 
-            if not tool_results:  # defensive: tool_use with no blocks -> stop
-                break
-
-            st.session_state.api_messages.append(
-                {"role": "user", "content": tool_results}
+            st.session_state.contents.append(
+                types.Content(role="user", parts=response_parts)
+            )
+        else:
+            log_event(
+                {"kind": "status", "text": f"⚠️ Stopped after {MAX_STEPS} steps."},
+                turn_log,
             )
 
-    except anthropic.APIError as exc:
-        msg = f"⚠️ Anthropic API error: {getattr(exc, 'message', None) or exc}"
-        answer_text = answer_text or msg
-        answer_slot.markdown(answer_text)
-        log_event({"kind": "error", "text": msg}, turn_log)
-        st.session_state.chat_log.append({"role": "assistant", "text": answer_text})
-        return
-    except Exception as exc:  # noqa: BLE001 - never crash the whole app on a turn
-        msg = f"⚠️ Unexpected error: {exc}"
+    except Exception as exc:  # noqa: BLE001 - never crash the app on a turn
+        msg = f"⚠️ Gemini error: {exc}"
         answer_text = answer_text or msg
         answer_slot.markdown(answer_text)
         log_event({"kind": "error", "text": msg}, turn_log)
@@ -401,30 +403,23 @@ def process_turn(client, prompt: str, chat_col, log_col, show_thinking: bool) ->
         return
 
     if not answer_text:
-        answer_text = "_(The agent finished without a textual response.)_"
+        answer_text = "_(The agent finished without a final message.)_"
     answer_slot.markdown(answer_text)
 
-    # Token usage for the whole turn (a single summary line keeps the log tidy).
-    log_event(
-        {
-            "kind": "usage",
-            "input": tok_in,
-            "output": tok_out,
-            "cache_read": tok_cache_read,
-            "cache_write": tok_cache_write,
-        },
-        turn_log,
-    )
-
-    if final_stop_reason == "max_tokens":
+    if usage_meta is not None:
         log_event(
-            {"kind": "status", "text": "⚠️ Response truncated (hit max_tokens)."},
+            {
+                "kind": "usage",
+                "input": getattr(usage_meta, "prompt_token_count", 0) or 0,
+                "output": getattr(usage_meta, "candidates_token_count", 0) or 0,
+                "total": getattr(usage_meta, "total_token_count", 0) or 0,
+            },
             turn_log,
         )
 
     if tool_calls_made == 0:
         log_event(
-            {"kind": "status", "text": "✅ Answered directly — no tools needed."},
+            {"kind": "status", "text": "✅ Answered directly — no tools used."},
             turn_log,
         )
 
@@ -437,23 +432,24 @@ def process_turn(client, prompt: str, chat_col, log_col, show_thinking: bool) ->
 
 
 def main() -> None:
-    st.set_page_config(page_title=PAGE_TITLE, page_icon="🧠", layout="wide")
+    st.set_page_config(page_title=PAGE_TITLE, page_icon="🛰️", layout="wide")
     init_state()
 
     # --- API key check (clear error if missing) --------------------------- #
     api_key = resolve_api_key()
     if not api_key:
-        st.title(f"🧠 {PAGE_TITLE}")
+        st.title(f"🛰️ {PAGE_TITLE}")
         st.error(
-            "**No Anthropic API key found.** Provide one of these:\n\n"
-            "**Streamlit Community Cloud** — open the app menu → "
-            "**Settings → Secrets** and add:\n\n"
+            "**No Gemini API key found.** Get a free one at "
+            "[aistudio.google.com](https://aistudio.google.com) → **Get API key**, "
+            "then provide it one of these ways:\n\n"
+            "**Streamlit Community Cloud** — app menu → **Settings → Secrets**:\n\n"
             "```toml\n"
-            'ANTHROPIC_API_KEY = "sk-ant-..."\n'
+            'GEMINI_API_KEY = "AIza..."\n'
             "```\n"
             "**Local** — set an environment variable, then restart:\n\n"
             "```bash\n"
-            'export ANTHROPIC_API_KEY="sk-ant-..."\n'
+            'export GEMINI_API_KEY="AIza..."\n'
             "streamlit run app.py\n"
             "```"
         )
@@ -462,63 +458,64 @@ def main() -> None:
     try:
         client = get_client(api_key)
     except Exception as exc:  # noqa: BLE001
-        st.title(f"🧠 {PAGE_TITLE}")
-        st.error(f"Failed to initialise the Anthropic client: {exc}")
+        st.title(f"🛰️ {PAGE_TITLE}")
+        st.error(f"Failed to initialise the Gemini client: {exc}")
         st.stop()
 
     # --- Sidebar ---------------------------------------------------------- #
     with st.sidebar:
         st.header("⚙️ Controls")
+        st.caption(f"Provider: **Google Gemini** (free tier)")
         st.caption(f"Model: `{MODEL}`")
-        show_thinking = st.toggle("Show agent reasoning", value=True)
         st.divider()
-        st.subheader("Try asking")
+        st.subheader("Try a task")
         st.markdown(
-            "- *What are the current system metrics?*\n"
-            "- *Search the web for the latest on quantum computing.*\n"
+            "- *Check the current system metrics and tell me if anything looks high.*\n"
+            "- *Search the web for the latest on quantum computing and summarise it.*\n"
             "- *Is the server healthy, and what's new with Rust?*\n"
             "- *Explain what a neural network is.* (no tools needed)"
         )
         st.divider()
-        if st.button("🗑️ Clear conversation", use_container_width=True):
-            st.session_state.api_messages = []
+        if st.button("🗑️ Clear", use_container_width=True):
+            st.session_state.contents = []
             st.session_state.chat_log = []
             st.session_state.activity_log = []
             st.rerun()
 
     # --- Header ----------------------------------------------------------- #
-    st.title(f"🧠 {PAGE_TITLE}")
+    st.title(f"🛰️ {PAGE_TITLE}")
     st.caption(
-        "Left: your conversation with the agent.  "
-        "Right: the agent's live reasoning, tool calls, arguments, and status."
+        "Give the agent a task and watch it work.  "
+        "Left: the task and final result.  "
+        "Right: the agent's live activity — narration, tool calls, and status."
     )
 
-    prompt = st.chat_input("Ask the agent something…")
+    prompt = st.chat_input("Give the agent a task to run…")
 
     chat_col, log_col = st.columns(2, gap="large")
 
-    # Render the existing transcript (previous turns) in each column.
+    # Render the existing history (previous tasks) in each column.
     with chat_col:
-        st.subheader("💬 Chat")
+        st.subheader("🎯 Tasks & Results")
         if not st.session_state.chat_log and not prompt:
             st.info(
-                "Send a message to start. The agent's thinking and any tool "
-                "calls will appear on the right."
+                "Give the agent a task to start. Its live activity — thinking, "
+                "tool calls, and status — appears on the right."
             )
         for message in st.session_state.chat_log:
             with st.chat_message(message["role"]):
                 st.markdown(message["text"])
 
     with log_col:
-        st.subheader("🛰️ Agent Activity")
+        st.subheader("🛰️ Live Agent Activity")
         if not st.session_state.activity_log and not prompt:
             st.caption("No activity yet.")
     for entry in st.session_state.activity_log:
         render_log_entry(entry, log_col)
 
-    # Handle a new message: stream the live turn beneath the rendered history.
+    # Handle a new task: stream the live run beneath the rendered history.
     if prompt:
-        process_turn(client, prompt, chat_col, log_col, show_thinking)
+        process_turn(client, prompt, chat_col, log_col)
 
 
 if __name__ == "__main__":

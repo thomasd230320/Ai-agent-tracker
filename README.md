@@ -1,15 +1,16 @@
-# 🧠 AI Agent Thought Dashboard
+# 🛰️ AI Agent Activity Dashboard
 
-A single-file [Streamlit](https://streamlit.io) app that visualizes a Claude
-agent's reasoning **in real time**. The screen is split into two side-by-side
-columns:
+A single-file [Streamlit](https://streamlit.io) app that lets you launch an AI
+agent and **watch it work in real time**. The screen is split into two
+side-by-side columns:
 
-| Left — 💬 Chat | Right — 🛰️ Agent Activity |
+| Left — 🎯 Tasks & Results | Right — 🛰️ Live Agent Activity |
 | --- | --- |
-| Your messages and the agent's final answers, as a clean chat. | A live log of the model's *thinking*, the *tools* it calls, the *arguments* it passes, and each call's *execution status* — shown before the final answer. |
+| The task you give the agent and its final answer. | A streaming feed of what the agent is doing — its narration, the tools it calls, the arguments it passes, and the status of each call — as it happens. |
 
-Built with the modern **Anthropic Python SDK** and Anthropic **tool calling
-(function calling)**, with two mock tools the model can choose to invoke:
+Powered by **Google Gemini** (the **free** tier from
+[aistudio.google.com](https://aistudio.google.com)) with function calling
+(tools) and streaming. Two mock tools the agent can choose to call:
 
 - `execute_web_search(query)` — returns canned, plausible search results.
 - `fetch_system_metrics()` — returns a randomized live-metrics snapshot.
@@ -18,36 +19,44 @@ Built with the modern **Anthropic Python SDK** and Anthropic **tool calling
 
 ```bash
 pip install -r requirements.txt
-export ANTHROPIC_API_KEY="sk-ant-..."
+# Get a free key at https://aistudio.google.com → "Get API key"
+export GEMINI_API_KEY="AIza..."
 streamlit run app.py
 ```
 
-If `ANTHROPIC_API_KEY` is missing, the app shows a clear, actionable error
-instead of crashing.
+If no key is found, the app shows a clear, actionable error instead of crashing.
+
+## Why Gemini?
+
+The free Gemini tier means **no pay-as-you-go billing** — and because it's a
+normal API key (not a subscription), the app **can be hosted** on Streamlit
+Community Cloud, so it works on your **phone and computer** at the same URL.
 
 ## How it works
 
-1. Your message is appended to the conversation and sent to Claude with the two
-   tool definitions.
-2. The response is **streamed**: extended (adaptive) thinking is rendered live
-   in the right column; the answer text streams into the left chat bubble.
-3. If Claude returns a `tool_use` block, the right column intercepts it,
-   displays the tool name (`st.info`) and arguments (`st.json`), runs the local
-   Python function, shows the result/status (`st.success` / `st.error`), and
-   feeds the `tool_result` back into the API loop.
-4. The loop repeats until Claude stops calling tools, then the final answer is
-   shown. Turns that need no tool are handled gracefully ("Answered directly").
+1. You give the agent a **task**.
+2. Gemini is called with the task and the two tool definitions, and the response
+   is **streamed**: the agent's narration shows live in the right column.
+3. If Gemini returns a function call, the right column shows the tool name
+   (`st.info`) and arguments (`st.json`), runs the local Python function, shows
+   the result/status (`st.success` / `st.error`), and feeds the result back into
+   the loop.
+4. The agent keeps going **autonomously** (up to `MAX_STEPS`) until it stops
+   calling tools, then the final answer appears on the left. Tasks needing no
+   tool are handled gracefully ("Answered directly").
 
-State (chat history + activity log) is kept in `st.session_state`, so it
-persists across Streamlit reruns. Per-turn token usage (including prompt-cache
-hits) is shown in the activity log.
+State (task history + activity log) is kept in `st.session_state`, so it persists
+across Streamlit reruns. Per-turn token usage is shown in the activity log.
+
+## Deploying
+
+See [`DEPLOY.md`](DEPLOY.md) for click-by-click Streamlit Community Cloud steps.
+The app also runs on Hugging Face Spaces, Render, Railway, and Fly.io. It will
+**not** run on Vercel — Streamlit needs a persistent WebSocket server, which
+Vercel's serverless functions don't provide.
 
 ## Model note
 
-The brief asked for `claude-3-5-sonnet`, but that snapshot has been **retired**
-by Anthropic and now returns a 404. The app therefore defaults to the current
-Sonnet — **`claude-sonnet-4-6`**, the documented drop-in replacement. Change the
-single `MODEL` constant at the top of `app.py` to use a different model.
-
-You can toggle the live "agent reasoning" view from the sidebar, and clear the
-conversation at any time.
+Defaults to **`gemini-2.0-flash`** (reliable on the free tier). Change the single
+`MODEL` constant at the top of `app.py` to use `gemini-2.5-flash` (adds visible
+reasoning) or another model.
