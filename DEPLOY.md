@@ -1,16 +1,8 @@
 # Deploying to Streamlit Community Cloud
 
 Streamlit Community Cloud (https://share.streamlit.io) is free and purpose-built
-for Streamlit apps. This app runs there with no code changes, and because it uses
-a Gemini **API key** (not a subscription) it works on your **phone and computer**
-at the same public URL.
-
-## Prerequisites
-
-- The code is on GitHub (it is — repo `thomasd230320/Ai-agent-tracker`).
-- A **free** Gemini API key — get one at https://aistudio.google.com → **Get API
-  key** (sign in with Google; no card). A Gemini key starts with `AIza...`.
-- A Streamlit Community Cloud account (sign in with GitHub).
+for Streamlit apps. This app needs **no API key and no secrets**, so deployment
+is as simple as it gets — and it works on your **phone and computer** at one URL.
 
 ## Steps
 
@@ -20,22 +12,18 @@ at the same public URL.
    - **Repository:** `thomasd230320/Ai-agent-tracker`
    - **Branch:** `main`
    - **Main file path:** `app.py`
-4. Open **Advanced settings → Secrets** and paste your **real** key:
-   ```toml
-   GEMINI_API_KEY = "AIza...your-real-key..."
-   ```
-5. Click **Deploy**. First boot installs `requirements.txt` and starts the app;
-   you'll get a public `*.streamlit.app` URL that works on any device.
+4. Click **Deploy**. First boot installs `requirements.txt` (just Streamlit) and
+   starts the app; you'll get a public `*.streamlit.app` URL.
+
+**No Secrets step needed** — there's no key to configure. If you previously set
+an `ANTHROPIC_API_KEY` or `GEMINI_API_KEY` secret, you can delete it; the
+simulation ignores them.
 
 ## Notes
 
-- **Never paste your key into chat, code, or commits.** Put it only in the Cloud
-  **Secrets** box. `.streamlit/secrets.toml` is git-ignored; a non-secret
-  template lives at `.streamlit/secrets.toml.example`.
-- **Secrets** are read as `st.secrets["GEMINI_API_KEY"]` (the app also accepts a
-  `GEMINI_API_KEY` / `GOOGLE_API_KEY` environment variable for local runs).
-- **Updates:** every push to the deployed branch auto-redeploys.
-- **Cost:** the Gemini free tier is rate-limited but **free** — no surprise bills.
+- **Cost:** $0. The app makes no external API calls, so there are no usage caps
+  or bills — ever.
+- **Updates:** every push to `main` auto-redeploys.
 - **Sleeping:** free apps sleep after inactivity and wake on the next visit.
 
 ## Other hosts
