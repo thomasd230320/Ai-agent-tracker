@@ -1,7 +1,8 @@
 /*
- * AI Agent Activity Dashboard — browser simulation.
+ * AI Agent Activity Dashboard — browser simulation with an animated robot.
  * Pure client-side: no API key, no backend, no limits. Deployable as a static
- * site (e.g. on Vercel). Mirrors the Streamlit simulation's behaviour.
+ * site (e.g. on Vercel). The robot in its room animates ONLY while a task runs,
+ * and rests when the task is finished.
  */
 "use strict";
 
@@ -93,11 +94,7 @@ function runSimTool(name, args) {
   if (name === "query_database") {
     const n = int(3, 9);
     const names = ["Alice", "Bob", "Chen", "Dara", "Esa"];
-    const sample = Array.from({ length: n }, (_, i) => ({
-      id: 1000 + i,
-      name: pick(names),
-      value: rnd(10, 999, 2),
-    }));
+    const sample = Array.from({ length: n }, (_, i) => ({ id: 1000 + i, name: pick(names), value: rnd(10, 999, 2) }));
     return { table: args.table, row_count: n, sample };
   }
   if (name === "analyze_data") {
@@ -121,18 +118,12 @@ function runSimTool(name, args) {
 
 function narrationFor(name, args) {
   switch (name) {
-    case "fetch_system_metrics":
-      return "Checking live system metrics to assess current health.";
-    case "execute_web_search":
-      return `Searching the web for "${args.query}" to gather context.`;
-    case "query_database":
-      return `Querying the \`${args.table}\` table for relevant records.`;
-    case "analyze_data":
-      return `Analysing the gathered data on "${args.subject}".`;
-    case "send_notification":
-      return `Sending a status update to ${args.channel}.`;
-    default:
-      return "Working on the next step.";
+    case "fetch_system_metrics": return "Checking live system metrics to assess current health.";
+    case "execute_web_search": return `Searching the web for "${args.query}" to gather context.`;
+    case "query_database": return `Querying the \`${args.table}\` table for relevant records.`;
+    case "analyze_data": return `Analysing the gathered data on "${args.subject}".`;
+    case "send_notification": return `Sending a status update to ${args.channel}.`;
+    default: return "Working on the next step.";
   }
 }
 
@@ -141,9 +132,7 @@ function composeAnswer(agent, findings) {
   for (const [name, d] of findings) {
     if (name === "fetch_system_metrics") {
       const hot = d.cpu_percent > 80 || d.memory_percent > 85 || d.error_rate_per_min > 8;
-      parts.push(
-        `system health looks ${hot ? "⚠️ elevated" : "✅ healthy"} (CPU ${d.cpu_percent}%, memory ${d.memory_percent}%, errors ${d.error_rate_per_min}/min)`
-      );
+      parts.push(`system health looks ${hot ? "⚠️ elevated" : "✅ healthy"} (CPU ${d.cpu_percent}%, memory ${d.memory_percent}%, errors ${d.error_rate_per_min}/min)`);
     } else if (name === "execute_web_search") {
       parts.push(`found ${d.result_count} relevant sources on "${d.query}"`);
     } else if (name === "query_database") {
@@ -161,10 +150,7 @@ function composeAnswer(agent, findings) {
 // --- DOM plumbing ---------------------------------------------------------- //
 const chatEl = () => document.getElementById("chat");
 const activityEl = () => document.getElementById("activity");
-
-function scrollDown(node) {
-  node.scrollTop = node.scrollHeight;
-}
+const scrollDown = (node) => { node.scrollTop = node.scrollHeight; };
 
 function addChat(role, html) {
   const wrap = document.createElement("div");
@@ -202,6 +188,28 @@ async function streamInto(node, text, fast = false) {
   node.textContent = text;
 }
 
+function escapeHtml(s) {
+  return s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
+
+// --- the robot in its room ------------------------------------------------- //
+function setRobot(working, text) {
+  const room = document.getElementById("room");
+  if (room) room.classList.toggle("working", !!working);
+  if (text != null) {
+    const b = document.getElementById("robotBubble");
+    if (b) b.textContent = text;
+  }
+}
+
+function sizeRoom() {
+  const room = document.getElementById("room");
+  const robot = document.getElementById("robot");
+  if (!room || !robot) return;
+  const span = Math.max(40, room.clientWidth - robot.offsetWidth - 56);
+  room.style.setProperty("--span", span + "px");
+}
+
 // --- the agent run --------------------------------------------------------- //
 let running = false;
 
@@ -215,6 +223,7 @@ async function runTask(task) {
   if (running || !task.trim()) return;
   setBusy(true);
   const agent = pick(AGENTS);
+  setRobot(true, `🤖 ${agent} — on it!`); // robot starts working
 
   addChat("user", `<span class="label">Task</span>${escapeHtml(task)}`);
   const assistant = addChat("agent", `<div class="status">🟢 <b>Agent ${agent}</b> is on it…</div><div class="answer"></div>`);
@@ -227,9 +236,11 @@ async function runTask(task) {
   const findings = [];
 
   for (const step of plan) {
+    setRobot(true, "💭 thinking…");
     const narr = addActivity("narration");
     await streamInto(narr, "💭 " + narrationFor(step.name, step.args));
 
+    setRobot(true, "🛠️ " + step.name);
     const call = addActivity("tool_call");
     call.innerHTML = `<div class="head">🛠️ Tool call: <code>${escapeHtml(step.name)}</code></div>`;
     call.appendChild(codeBlock(step.args));
@@ -252,17 +263,17 @@ async function runTask(task) {
   done.textContent = `🏁 ${agent} completed ${plan.length} step(s).`;
   scrollDown(activityEl());
 
+  // task finished → robot stops and rests
+  setRobot(false, "✅ done!");
   setBusy(false);
+  setTimeout(() => { if (!running) setRobot(false, "💤 idle"); }, 1600);
   document.getElementById("taskInput").focus();
-}
-
-function escapeHtml(s) {
-  return s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 }
 
 // --- wire up the UI -------------------------------------------------------- //
 function init() {
-  document.getElementById("roster").textContent = AGENTS.map((a) => "🤖 " + a).join("   ·   ");
+  sizeRoom();
+  window.addEventListener("resize", sizeRoom);
 
   const chips = document.getElementById("chips");
   EXAMPLE_TASKS.slice(0, 4).forEach((t) => {
@@ -285,6 +296,7 @@ function init() {
   document.getElementById("clearBtn").addEventListener("click", () => {
     chatEl().innerHTML = "";
     activityEl().innerHTML = "";
+    setRobot(false, "💤 idle");
   });
 }
 
