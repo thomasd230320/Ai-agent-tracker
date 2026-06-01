@@ -1,47 +1,54 @@
 # 🛰️ AI Agent Activity Dashboard (Simulation)
 
-A single-file [Streamlit](https://streamlit.io) app that lets you dispatch a
-task to an autonomous AI agent and **watch it work in real time** — with **no
-API key, no account, no billing, and no rate limits**. Everything is simulated
-locally, so it runs **free anywhere** (and on your phone + computer once hosted).
+Dispatch a task to an autonomous AI agent and **watch it work in real time** —
+with **no API key, no account, no billing, and no rate limits**. Everything is
+simulated locally, so it runs **free anywhere**, on phone + computer.
 
 | Left — 🎯 Mission Control | Right — 🛰️ Live Agent Activity |
 | --- | --- |
 | The task you dispatch and the agent's result. | A streaming feed of the agent's narration, the tools it "calls", the arguments, and the result of each step — as it happens. |
 
-## Quick start
+This repo ships the dashboard in **two forms** — pick whichever host you like:
 
+| Version | Folder | Tech | Best host |
+| --- | --- | --- | --- |
+| **Streamlit app** | `app.py` | Python / Streamlit | Streamlit Community Cloud, Render, HF Spaces |
+| **Browser app** | `web/` | Static HTML + CSS + JS | **Vercel**, Netlify, GitHub Pages |
+
+Both simulate the same five tools (`execute_web_search`, `fetch_system_metrics`,
+`query_database`, `analyze_data`, `send_notification`) and behave identically.
+
+## Run locally
+
+**Streamlit version:**
 ```bash
 pip install -r requirements.txt
 streamlit run app.py
 ```
 
-That's it — no key, no secrets, no setup. It just runs.
+**Browser version** (no install needed — it's static):
+```bash
+# any static server works, e.g.:
+python -m http.server -d web 8000
+# then open http://localhost:8000
+```
+…or just open `web/index.html` in your browser.
 
-## What it does
+## Deploy
 
-- Dispatch a task (type your own, or hit **🎲 Dispatch a random task**).
-- A named agent is assigned and **autonomously** plans which tools to use based
-  on the task, then streams each step live into the activity feed:
-  - 💭 narration of what it's about to do,
-  - 🛠️ the tool call + arguments (`st.info` / `st.json`),
-  - ✅ the tool result (`st.success` / `st.code`),
-- …and finishes with a summarised result on the left.
+See [`DEPLOY.md`](DEPLOY.md) for click-by-click steps:
+- **Vercel** (or Netlify / GitHub Pages) — deploy the static `web/` folder. No
+  key, no build, works on phone + computer.
+- **Streamlit Community Cloud** — deploy `app.py`.
 
-Five simulated tools drive the activity: `execute_web_search`,
-`fetch_system_metrics`, `query_database`, `analyze_data`, and
-`send_notification`. All return realistic mock data — **nothing leaves your
-machine and there's nothing to pay for.**
+> The browser version runs great on **Vercel** because it's 100% client-side
+> (no server, no WebSocket). The Streamlit version can't run on Vercel —
+> Streamlit needs a persistent server — so use Streamlit Cloud for that one.
 
-State (task history + activity log) lives in `st.session_state`, so it persists
-across Streamlit reruns.
+## Wiring in a real model later
 
-## Deploying
-
-See [`DEPLOY.md`](DEPLOY.md) for click-by-click Streamlit Community Cloud steps.
-Because it needs no API key, deployment is just: pick the repo, set the main file
-to `app.py`, and click Deploy — it works on phone + computer at one URL.
-
-> Want to wire it to a *real* LLM later (Claude, Gemini, etc.)? The agent loop in
-> `process_task()` is the single place to swap the simulated tool calls for real
-> model calls.
+Everything is simulated today. To connect a real LLM (Claude, Gemini, …), the
+agent loop is isolated in one place: `process_task()` in `app.py` (or
+`runTask()` in `web/app.js`). Swap the simulated tool calls for real model calls
+there — note that a real model needs an API key + billing, which is why this
+demo stays fully simulated and free.
