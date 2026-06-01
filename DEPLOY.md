@@ -1,48 +1,50 @@
 # Deploying the dashboard
 
-Two versions, two easy hosts. Neither needs an API key or any secrets.
+The animated robot dashboard is a **static site at the repo root**
+(`index.html`, `styles.css`, `app.js`) — no API key, no build, no secrets.
 
 ---
 
-## Option A — Browser version on Vercel  (recommended for phone + computer)
+## Option A — Vercel  (recommended; phone + computer)
 
-The `web/` folder is a plain static site (HTML + CSS + JS) that runs entirely in
-the browser, so Vercel can host it perfectly — free, fast, on every device.
+Because the static site is at the **root**, Vercel needs **no special settings**.
 
-1. Push this repo to GitHub (already done: `thomasd230320/Ai-agent-tracker`).
-2. Go to https://vercel.com → **Add New… → Project** → **Import** this repo.
-3. In the configure screen:
-   - **Root Directory:** click **Edit** and set it to **`web`**.
-   - **Framework Preset:** **Other**.
-   - **Build Command:** leave empty. **Output Directory:** leave default.
-   - No Environment Variables needed.
-4. Click **Deploy**. You'll get a public `*.vercel.app` URL that works on your
-   phone and computer.
+1. Push to GitHub (already done: `thomasd230320/Ai-agent-tracker`).
+2. https://vercel.com → **Add New… → Project → Import** this repo.
+3. Leave everything at the **defaults**:
+   - Framework Preset: **Other** (auto-detected).
+   - Root Directory: **`./`** (the repo root — leave as is).
+   - Build Command / Output Directory: **leave empty/default**.
+4. Click **Deploy** → you get a public `*.vercel.app` URL.
 
-> Why `Root Directory = web`? It points Vercel at the static site and keeps it
-> from trying to build the Python (`app.py`) file at the repo root.
+> Already created a Vercel project that failed with *"Found app.py…"*? That was
+> because the Python file used to be at the root. It's now moved to
+> `streamlit/`, so just **redeploy** (Deployments → ⋯ → Redeploy) — or, to be
+> safe, delete the old project and re-import fresh with the defaults above.
+> A `.vercelignore` also keeps the Python folders out of the Vercel build.
 
-**Netlify / GitHub Pages** work the same way — serve the `web/` folder as a
-static site (set the publish/base directory to `web`).
+**Netlify / GitHub Pages** work the same way — serve the repo root as a static
+site (no build).
 
 ---
 
-## Option B — Streamlit version on Streamlit Community Cloud
+## Option B — Streamlit Community Cloud
 
-The `app.py` version needs a persistent server, so host it on Streamlit Cloud
-(it will **not** run on Vercel).
-
-1. Go to https://share.streamlit.io and **sign in with GitHub**.
+1. https://share.streamlit.io → **sign in with GitHub**.
 2. **Create app → Deploy a public app from GitHub**.
 3. **Repository:** `thomasd230320/Ai-agent-tracker` · **Branch:** `main` ·
-   **Main file path:** `app.py`.
-4. Click **Deploy**. No Secrets step — there's no key to configure.
+   **Main file path:** `streamlit/app.py`  ← note the `streamlit/` prefix.
+4. **Deploy.** No Secrets needed.
+
+> If you have an existing Streamlit Cloud app pointed at `app.py`, update its
+> **Main file path** to `streamlit/app.py` (Manage app → Settings), since the
+> file moved. (This version has no robot animation — that's the root static site.)
 
 ---
 
 ## Notes
 
-- **Cost:** $0 for both. No external API calls, so no usage caps or bills — ever.
+- **Cost:** $0 for both — no external API calls, no caps, no bills.
 - **Updates:** pushing to `main` auto-redeploys on both Vercel and Streamlit Cloud.
-- If you previously set an `ANTHROPIC_API_KEY` / `GEMINI_API_KEY` secret on the
-  Streamlit app, you can delete it — the simulation ignores it.
+- **Real Claude (local):** see `local/README.md` — runs on your Pro/Max
+  subscription, locally only.
