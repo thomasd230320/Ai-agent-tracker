@@ -37,9 +37,10 @@ from google.genai import types
 # Configuration
 # --------------------------------------------------------------------------- #
 
-# Free-tier friendly default. You can switch to "gemini-2.5-flash" (adds
-# reasoning) or "gemini-1.5-flash" by changing this one constant.
-MODEL = "gemini-2.0-flash"
+# Lighter model with its own free-tier quota — a good choice when the standard
+# flash model hits a spend/usage cap. Other options to try if needed:
+# "gemini-1.5-flash", "gemini-2.5-flash-lite", "gemini-2.0-flash".
+MODEL = "gemini-2.0-flash-lite"
 
 # Safety cap on the agent's autonomous tool loop (think -> call tool -> repeat).
 MAX_STEPS = 8
