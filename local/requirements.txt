@@ -1,0 +1,5 @@
+# Local "real Claude" dashboard — runs on your Claude Code (Pro/Max) login.
+# Also requires Node.js + the Claude Code CLI (see local/README.md), which the
+# Agent SDK drives under the hood.
+streamlit>=1.32
+claude-agent-sdk>=0.2
