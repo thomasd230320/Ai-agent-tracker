@@ -1,54 +1,42 @@
-# 🛰️ AI Agent Activity Dashboard (Simulation)
+# 🤖 AI Agent Activity Dashboard
 
-Dispatch a task to an autonomous AI agent and **watch it work in real time** —
-with **no API key, no account, no billing, and no rate limits**. Everything is
-simulated locally, so it runs **free anywhere**, on phone + computer.
+Give an agent a task and watch a **little robot work in its room** — it busies
+about while working and rests when it's done. Free, no API key, no limits.
 
-| Left — 🎯 Mission Control | Right — 🛰️ Live Agent Activity |
-| --- | --- |
-| The task you dispatch and the agent's result. | A streaming feed of the agent's narration, the tools it "calls", the arguments, and the result of each step — as it happens. |
+## Repo layout
 
-This repo ships the dashboard in **two forms** — pick whichever host you like:
+| Path | What it is | Best host |
+| --- | --- | --- |
+| `index.html`, `styles.css`, `app.js` (**root**) | The **animated robot** dashboard — static HTML/CSS/JS, runs in the browser | **Vercel** / Netlify / GitHub Pages (zero config) |
+| `streamlit/app.py` | Same simulation as a Streamlit app | Streamlit Community Cloud |
+| `local/claude_agent_app.py` | **Real Claude** version (runs on your Pro/Max subscription, local only) | Run locally — see `local/README.md` |
 
-| Version | Folder | Tech | Best host |
-| --- | --- | --- | --- |
-| **Streamlit app** | `app.py` | Python / Streamlit | Streamlit Community Cloud, Render, HF Spaces |
-| **Browser app** | `web/` | Static HTML + CSS + JS | **Vercel**, Netlify, GitHub Pages |
+The static root site is the one with the robot, and it's the easiest to host.
 
-Both simulate the same five tools (`execute_web_search`, `fetch_system_metrics`,
-`query_database`, `analyze_data`, `send_notification`) and behave identically.
+## See it instantly (no hosting)
 
-## Run locally
+Download the repo (GitHub → **Code → Download ZIP**), extract it, and
+**double‑click `index.html`** — it opens in your browser. Type a task (or hit
+**🎲 Random task**) and watch the robot get to work, then rest when finished.
 
-**Streamlit version:**
+Or serve it locally:
 ```bash
-pip install -r requirements.txt
-streamlit run app.py
+python -m http.server 8000      # then open http://localhost:8000
 ```
 
-**Browser version** (no install needed — it's static):
-```bash
-# any static server works, e.g.:
-python -m http.server -d web 8000
-# then open http://localhost:8000
-```
-…or just open `web/index.html` in your browser.
+## Deploy (for phone + computer)
 
-## Deploy
+See [`DEPLOY.md`](DEPLOY.md). Short version:
+- **Vercel** — import the repo and click **Deploy**. The static site is at the
+  repo root, so **no settings are needed** (no Root Directory, no build).
+- **Streamlit Cloud** — deploy with main file path `streamlit/app.py`.
 
-See [`DEPLOY.md`](DEPLOY.md) for click-by-click steps:
-- **Vercel** (or Netlify / GitHub Pages) — deploy the static `web/` folder. No
-  key, no build, works on phone + computer.
-- **Streamlit Community Cloud** — deploy `app.py`.
+> The robot lives in the **root static site** (Vercel/Netlify/Pages). The
+> Streamlit version (`streamlit/app.py`) is the plain simulation without the
+> robot animation.
 
-> The browser version runs great on **Vercel** because it's 100% client-side
-> (no server, no WebSocket). The Streamlit version can't run on Vercel —
-> Streamlit needs a persistent server — so use Streamlit Cloud for that one.
+## Real Claude (optional, local)
 
-## Wiring in a real model later
-
-Everything is simulated today. To connect a real LLM (Claude, Gemini, …), the
-agent loop is isolated in one place: `process_task()` in `app.py` (or
-`runTask()` in `web/app.js`). Swap the simulated tool calls for real model calls
-there — note that a real model needs an API key + billing, which is why this
-demo stays fully simulated and free.
+`local/claude_agent_app.py` wires the dashboard to real Claude via the Claude
+Agent SDK on your Pro/Max subscription (no API key, no per‑use cost) — but it
+runs locally only. Setup in [`local/README.md`](local/README.md).

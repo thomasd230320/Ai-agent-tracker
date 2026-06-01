@@ -1,0 +1,8 @@
+# Vercel deploys the static site at the repo root (index.html / styles.css /
+# app.js). Keep the Python apps out of the Vercel build so it isn't mistaken
+# for a Python project.
+streamlit/
+local/
+__pycache__/
+.streamlit/
+*.py
