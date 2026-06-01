@@ -196,6 +196,22 @@ def get_client(api_key: str) -> anthropic.Anthropic:
     return anthropic.Anthropic(api_key=api_key)
 
 
+def resolve_api_key() -> str | None:
+    """Find the Anthropic API key from Streamlit secrets or the environment.
+
+    Works on Streamlit Community Cloud (key set under *Settings → Secrets*),
+    and locally (a ``.streamlit/secrets.toml`` file or an ``ANTHROPIC_API_KEY``
+    environment variable). Streamlit secrets take precedence when present.
+    """
+    try:
+        # Accessing st.secrets raises if no secrets file/config exists, so guard it.
+        if "ANTHROPIC_API_KEY" in st.secrets:
+            return str(st.secrets["ANTHROPIC_API_KEY"])
+    except Exception:  # noqa: BLE001 - "no secrets configured" is a normal case
+        pass
+    return os.environ.get("ANTHROPIC_API_KEY")
+
+
 # --------------------------------------------------------------------------- #
 # Rendering helpers
 # --------------------------------------------------------------------------- #
@@ -425,12 +441,17 @@ def main() -> None:
     init_state()
 
     # --- API key check (clear error if missing) --------------------------- #
-    api_key = os.environ.get("ANTHROPIC_API_KEY")
+    api_key = resolve_api_key()
     if not api_key:
         st.title(f"🧠 {PAGE_TITLE}")
         st.error(
-            "**ANTHROPIC_API_KEY is not set.**\n\n"
-            "Claude needs an API key. Set it in your shell and restart the app:\n\n"
+            "**No Anthropic API key found.** Provide one of these:\n\n"
+            "**Streamlit Community Cloud** — open the app menu → "
+            "**Settings → Secrets** and add:\n\n"
+            "```toml\n"
+            'ANTHROPIC_API_KEY = "sk-ant-..."\n'
+            "```\n"
+            "**Local** — set an environment variable, then restart:\n\n"
             "```bash\n"
             'export ANTHROPIC_API_KEY="sk-ant-..."\n'
             "streamlit run app.py\n"
