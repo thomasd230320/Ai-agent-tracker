@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>AI Agent Activity Dashboard</title>
+  <meta name="description" content="Watch autonomous AI agents work — a free, in-browser simulation." />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🛰️</text></svg>" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header>
+    <h1>🛰️ AI Agent Activity Dashboard</h1>
+    <p>Dispatch a task and watch an autonomous agent work — live. Left: the task &amp; result. Right: its reasoning, tool calls, and status.</p>
+    <span class="badge">Simulation — no API key, no limits, free. Runs entirely in your browser.</span>
+    <div id="roster"></div>
+  </header>
+
+  <main class="grid">
+    <section class="panel">
+      <h2>🎯 Mission Control</h2>
+      <div id="chat" class="scroll" aria-live="polite"></div>
+      <form id="taskForm">
+        <input id="taskInput" type="text" placeholder="Dispatch a task to an agent…" autocomplete="off" />
+        <button type="submit">Dispatch</button>
+      </form>
+      <div class="row">
+        <button id="randomBtn" class="ghost" type="button">🎲 Random task</button>
+        <button id="clearBtn" class="ghost" type="button">🗑️ Clear</button>
+      </div>
+      <div id="chips" class="chips"></div>
+    </section>
+
+    <section class="panel">
+      <h2>🛰️ Live Agent Activity</h2>
+      <div id="activity" class="scroll" aria-live="polite"></div>
+    </section>
+  </main>
+
+  <footer>Static simulation — no backend, no API calls. Deployable to any static host (Vercel, Netlify, GitHub Pages…).</footer>
+
+  <script src="app.js"></script>
+</body>
+</html>
